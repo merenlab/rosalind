@@ -10,7 +10,7 @@ from collections import defaultdict
 
 class SlurmMonitor:
     def __init__(self):
-        self.slack_webhook_url = "https://hooks.slack.com/services/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"
+        self.slack_webhook_url = "<WEB HOOK HERE>"
         self.check_interval = 60
         self.previous_users = None
 
