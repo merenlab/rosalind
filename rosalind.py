@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8
+
 import re
 import sys
 import time
@@ -8,6 +11,7 @@ import platform
 import argparse
 import requests
 import subprocess
+
 from datetime import datetime
 from collections import defaultdict
 
