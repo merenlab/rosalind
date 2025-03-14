@@ -26,8 +26,9 @@ class SlurmMonitor:
         self.group_id = A('group_id')
 
         self.check_interval = A('squeue_check_interval')
-        self.overall_summary_interval = A('overall_summary_interval')
         self.user_jobs_interval = A('user_jobs_interval')
+        self.overall_summary_interval = A('overall_summary_interval')
+        self.overall_summary_at_start = A('overall_summary_at_start')
 
         self.stdout_only = A('stdout_only')
         self.testing = A('testing')
@@ -295,8 +296,10 @@ class SlurmMonitor:
         output = self.get_slurm_queue()
         self.previous_users = self.get_current_users(output)
 
-        while True:
+        if self.overall_summary_at_start:
+            self.summarize_jobs()
 
+        while True:
             if int(time.time()) % self.user_jobs_interval < 60:
                 # runs every minute
                 self.check_user_changes()
@@ -335,6 +338,9 @@ def get_user_args():
         "overall job summaries to be prepared and sent to Slack. The default is 21600, i.e., every 6 hour cycle.")
     groupB.add_argument('--user-jobs-interval', metavar="SECONDS", default=60, type=int, help="The frequency of "
         "checking changes in user jobs (new jobs, finished jobs, etc). The default is 60, i.e., every minute.")
+    groupB.add_argument('--overall-summary-at-start', default=False, help="By default, the overal summary of jobs "
+        "takes place every `--overall-summar-interval` around the clock. This flag ensures that at the beginning of "
+        "the program there will be an overall summary just once regardless of the interval.")
 
 
     groupC = parser.add_argument_group('DEVELOPMENT & TESTING', 'Parameters to test the program.')
