@@ -1,7 +1,11 @@
 import re
+import sys
 import time
+import glob
 import random
+import shutil
 import platform
+import argparse
 import requests
 import subprocess
 from datetime import datetime
@@ -9,29 +13,64 @@ from collections import defaultdict
 
 
 class SlurmMonitor:
-    def __init__(self):
-        self.slack_webhook_url = "<WEB HOOK HERE>"
-        self.check_interval = 60
-        self.previous_users = None
+    def __init__(self, args):
+        self.args = args
 
-        self.known_users = {"tepp5511": "<@meren>",
-                            "elgo4396": "<@iva>",
-                            "patz5242": "<@florian>",
-                            "bube0466": "<@mete>",
-                            "gegu0440": "<@xixi>",
-                            "larm6177": "<@sarah>",
-                            "tele0144": "<@alex>",
-                            "xuaf2725": "<@katy>",
-                            "sore6591": "<@avril>",
-                            "jert0988": "<@amy>",
-                            "zina4710": "<@jessika>",
-                            "mueb6691": "Matthias Weitz"}
+        # user args
+        A = lambda x: self.args.__dict__[x] if x in self.args.__dict__ else None
+        self.webhook = A('webhook')
+        self.group_id = A('group_id')
+
+        self.check_interval = A('squeue_check_interval')
+        self.overall_summary_interval = A('overall_summary_interval')
+        self.user_jobs_interval = A('user_jobs_interval')
+
+        self.stdout_only = A('stdout_only')
+        self.testing = A('testing')
+
+        if self.testing:
+            self.stdout_only = True
+
+        # some default variables
+        self.previous_users = set([])
+
+        # this shouldn't be here, but I will keep it here until there is a
+        # second user of this program :p
+        self.known_users = {"tepp5511": "<@U08H4G2UV>", # meren
+                            "elgo4396": "<@UCE940CG0>", # iva
+                            "patz5242": "<@UDKBXCF1R>", # florian
+                            "bube0466": "<@U03N57D5PF0>", # mete
+                            "gegu0440": "<@U0677CTPU2J>", # xixi
+                            "larm6177": "<@U05A89NS5QT>", # sarah
+                            "tele0144": "<@U041JV3L1GX>", # alex
+                            "xuaf2725": "<@U05SYDN0QKU>", # katy
+                            "sore6591": "<@U06GGGRPZ18>", # avril
+                            "jert0988": "<@U0106BK0S3Y>", # amy
+                            "zina4710": "<@UHYU10DTK>", # jessika
+                            "mueb6691": "Matthias Weitz", # matthias
+                            }
+
+        try:
+            if not shutil.which("squeue") and not self.testing:
+                raise RuntimeError("You don't have `squeue` on this computer to run this program without the `--testing` flag :/")
+        except RuntimeError as e:
+            print(f"\n\033[91mERROR:\033[0m {e}\n")
+            sys.exit(1)
+
+        try:
+            if not self.webhook and not self.stdout_only:
+                raise RuntimeError("You are running this program without a webhook -- that is fine, but in that case you have to "
+                                   "include the flag  `--stdout-only`. BECAUSE.")
+        except RuntimeError as e:
+            print(f"\n\033[91mERROR:\033[0m {e}\n")
+            sys.exit(1)
+
+
+
 
     @staticmethod
     def parse_time(time_str):
-        """
-        Converts time string from various squeue output formats (D-H:M:S, H:M:S, M:S, S) to a human-readable format.
-        """
+        """Converts time string from various squeue output formats (D-H:M:S, H:M:S, M:S, S) to a human-readable format."""
 
         if '-' in time_str:
             day, rest = time_str.split('-')
@@ -75,7 +114,7 @@ class SlurmMonitor:
             f"New ROSA jobs incoming for *{user}*! :computer:",
             f"*{user}* has new jobs running on ROSA. :chart_with_upwards_trend:",
             f"Looks like *{user}* is keeping ROSA busy again! :hourglass_flowing_sand:",
-            f"Incoming workload detected! *{user}* has jobs in the queue! :robot_face:",
+            f"Incoming workload detected! *{user}* has jobs in the queue! :robot:",
             f"New jobs for *{user}* on ROSA. :gear:",
             f"Brace yourselves, *{user}*’s jobs are running on ROSA! :zap:",
             f"Guess who’s back? It’s *{user}* with more jobs on ROSA! :sunglasses:",
@@ -85,7 +124,7 @@ class SlurmMonitor:
             f"Great news: *{user}* has new jobs in ROSA’s pipeline! :brain:",
             f"All systems go! *{user}* has jobs running on ROSA! :rocket:",
             f"New jobs alert! *{user}* is back at it on ROSA! :alarm_clock:",
-            f"Time to put ROSA to work! *{user}* just submitted some jobs! :computer_mouse:",
+            f"Time to put ROSA to work! *{user}* just submitted some jobs! :computer:",
             f"Processing request confirmed! *{user}*’s jobs are in the system! :white_check_mark:"
         ]
 
@@ -99,7 +138,7 @@ class SlurmMonitor:
             f"Break time! *{user}*’s jobs are all completed. :coffee:",
             f"All clear! *{user}* has no active jobs on ROSA. :white_check_mark:",
             f"Another batch bites the dust! *{user}* is all done. :boom:",
-            f"Processing complete! *{user}*’s jobs are no more! :robot_face:",
+            f"Processing complete! *{user}*’s jobs are no more! :robot:",
             f"Compute cycle complete! *{user}* has finished all jobs! :star:",
             f"All of *{user}*’s jobs have crossed the finish line! :checkered_flag:",
             f"ROSA says goodbye to *{user}*’s jobs. Until next time! :wave:",
@@ -108,7 +147,7 @@ class SlurmMonitor:
             f"Ding! *{user}*’s job queue is empty now! :bell:",
             f"Nothing left in the ROSA queue for *{user}*! :ghost:",
             f"Job execution complete! *{user}*’s tasks are finished! :white_check_mark:",
-            f"Well done, *{user}*! All your ROSA jobs are complete. :medal_sports:",
+            f"Well done, *{user}*! All your ROSA jobs are complete. :sports_medal:",
             f"ROSA is free from *{user}*'s jobs! :bird:"
         ]
 
@@ -124,7 +163,7 @@ class SlurmMonitor:
         """Fetch the current slurm queue status using squeue."""
 
         try:
-            result = subprocess.run(["squeue", "-A", "agecodatasci", "-o", "%11i %35j %20u %5C %13m %8T %10M %9l %6D %R"],
+            result = subprocess.run(["squeue", "-A", self.group_id, "-o", "%11i %35j %20u %5C %13m %8T %10M %9l %6D %R"],
                                     capture_output=True, text=True, check=True)
             return result.stdout.strip()
         except subprocess.CalledProcessError as e:
@@ -137,42 +176,44 @@ class SlurmMonitor:
         return self.known_users[user] if user in self.known_users else user
 
 
-    def get_current_users(self, job_output):
+    def get_current_users(self, slurm_queue):
         """Extracts a set of unique users from the Slurm queue output."""
 
-        lines = job_output.strip().split('\n')[1:]
+        lines = slurm_queue.strip().split('\n')[1:]
 
         users = set([self.get_known_user_name(u) for u in [re.split(r'\s+', line, maxsplit=9)[2] for line in lines]])
 
         return users
 
 
-    def check_user_changes(self):
+    def check_user_changes(self, slurm_queue=None):
         """Check for new and finished users and send Slack notifications."""
 
-        # get a fresh output
-        output = self.get_slurm_queue()
-        current_users = self.get_current_users(output)
+        if not slurm_queue:
+            slurm_queue = self.get_slurm_queue()
+
+        current_users = self.get_current_users(slurm_queue)
 
         # find out hat has changed
         new_users = current_users - self.previous_users
         finished_users = self.previous_users - current_users
 
         for user in new_users:
-            self.send_slack_message(self.get_random_slack_notification_for_jobs(user, 'new'))
+            self.message(self.get_random_slack_notification_for_jobs(user, 'new'))
 
         for user in finished_users:
-            self.send_slack_message(self.get_random_slack_notification_for_jobs(user, 'finished'))
+            self.message(self.get_random_slack_notification_for_jobs(user, 'finished'))
 
         self.previous_users = current_users
 
 
-    def summarize_jobs(self):
+    def summarize_jobs(self, slurm_queue=None):
         """Summarizes job statistics per user based on the provided job output."""
 
-        job_output = self.get_slurm_queue()
+        if not slurm_queue:
+            slurm_queue = self.get_slurm_queue()
 
-        lines = job_output.strip().split('\n')
+        lines = slurm_queue.strip().split('\n')
 
         job_data = []
         for line in lines[1:]:
@@ -212,34 +253,94 @@ class SlurmMonitor:
 
         if len(jobs_summary):
             message = f"""A *status update* from ROSA (by <@rosalind> on head node _{platform.node()}_ at *{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}*)\n\n{jobs_summary}"""
-            self.send_slack_message(message)
+            self.message(message)
 
 
-    def send_slack_message(self, message):
-        """Send a message to Slack using the webhook."""
-        payload = {"text": message}
-        response = requests.post(self.slack_webhook_url, json=payload)
-        return response.status_code, response.text
+    def message(self, message):
+        """Send a message to Slack using the webhook (or print it to the terminal)"""
+
+        print('--- Slack Message ---')
+        print(message)
+        print()
+
+        if self.webhook and not self.stdout_only:
+            payload = {"text": message}
+            response = requests.post(self.webhook, json=payload)
+            return response.status_code, response.text
+        else:
+            return None, None
 
 
-    def run(self):
-        """Main loop to check the Slurm queue and send updates to Slack."""
+    def __test_run(self):
+        for slurm_output_path in glob.glob('sandbox/slurm-outputs-for-testing/*.txt'):
+            print(f'#' * (len(slurm_output_path) + 8))
+            print(f'### {slurm_output_path} ###')
+            print(f'#' * (len(slurm_output_path) + 8))
+            print()
+            slurm_queue = open(slurm_output_path).read()
+            self.check_user_changes(slurm_queue)
+            self.summarize_jobs(slurm_queue)
+            time.sleep(1)
 
+
+    def __actual_run(self):
         output = self.get_slurm_queue()
         self.previous_users = self.get_current_users(output)
 
         while True:
-            if True:
+
+            if int(time.time()) % self.user_jobs_interval < 60:
                 # runs every minute
                 self.check_user_changes()
 
-            if int(time.time()) % 21600 < 60:
+            if int(time.time()) % self.overall_summary_interval < 60:
                 # runs every 6 hour-cycle
                 self.summarize_jobs()
 
             time.sleep(self.check_interval)
 
 
+    def run(self):
+        """Main loop to check the Slurm queue and send updates to Slack."""
+
+        if self.testing:
+            self.__test_run()
+        else:
+            self.__actual_run()
+
+
+def get_user_args():
+    """Parses commandline arguments"""
+
+    parser = argparse.ArgumentParser()
+    groupA = parser.add_argument_group('ESSENTIALS', 'Essential information related to Slurm and Slack')
+    groupA.add_argument('--partition', metavar="ID", default=None, help="Your group ID or partition on Slurm. If you "
+        "have one, you can leave this empty and see what happens (we haven't really tested it lol).")
+    groupA.add_argument('--webhook', metavar="URL", default=None, help="Slack web hook for the program to "
+        "communicate with you.")
+
+    groupB = parser.add_argument_group('INTERVALS', 'Defaults are just fine, but you can also set anyting you want here')
+    groupB.add_argument('--squeue-check-interval', metavar="SECONDS", default=60, type=int, help="The frequency of "
+        "squeue output collection. The default of 60, which means rosalind will check the slurm output once every minute. "
+        "It is a very bad idea to change this :/")
+    groupB.add_argument('--overall-summary-interval', metavar="SECONDS", default=21600, type=int, help="The frequency of "
+        "overall job summaries to be prepared and sent to Slack. The default is 21600, i.e., every 6 hour cycle.")
+    groupB.add_argument('--user-jobs-interval', metavar="SECONDS", default=60, type=int, help="The frequency of "
+        "checking changes in user jobs (new jobs, finished jobs, etc). The default is 60, i.e., every minute.")
+
+
+    groupC = parser.add_argument_group('DEVELOPMENT & TESTING', 'Parameters to test the program.')
+    groupC.add_argument('--stdout-only', action="store_true", default=False, help="Don't send anything to Slack, "
+        "print messages that were meant to be sent to slack to the terminal.")
+    groupC.add_argument('--testing', action="store_true", default=False, help="Declaring this flag will instruct the "
+        "program to 'simulate' a bunch of slurm outputs, and will set all the intervals the way it sees fit. The "
+        "messages that were meant to be sent to the Slack environment will also not be sent to the slack environment, "
+        "but printed on screen just so you can see things.")
+
+    return parser.parse_args()
+
+
+
 if __name__ == "__main__":
-    monitor = SlurmMonitor()
+    monitor = SlurmMonitor(get_user_args())
     monitor.run()
