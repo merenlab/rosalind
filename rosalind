@@ -277,9 +277,9 @@ class SlurmMonitor:
 
     def __test_run(self):
         for slurm_output_path in glob.glob('sandbox/slurm-outputs-for-testing/*.txt'):
-            print(f'#' * (len(slurm_output_path) + 8))
+            print('#' * (len(slurm_output_path) + 8))
             print(f'### {slurm_output_path} ###')
-            print(f'#' * (len(slurm_output_path) + 8))
+            print('#' * (len(slurm_output_path) + 8))
             print()
             slurm_queue = open(slurm_output_path).read()
             self.check_user_changes(slurm_queue)
