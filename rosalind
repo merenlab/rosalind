@@ -338,7 +338,7 @@ def get_user_args():
         "overall job summaries to be prepared and sent to Slack. The default is 21600, i.e., every 6 hour cycle.")
     groupB.add_argument('--user-jobs-interval', metavar="SECONDS", default=60, type=int, help="The frequency of "
         "checking changes in user jobs (new jobs, finished jobs, etc). The default is 60, i.e., every minute.")
-    groupB.add_argument('--overall-summary-at-start', default=False, help="By default, the overal summary of jobs "
+    groupB.add_argument('--overall-summary-at-start', default=False, action="store_true", help="By default, the overal summary of jobs "
         "takes place every `--overall-summar-interval` around the clock. This flag ensures that at the beginning of "
         "the program there will be an overall summary just once regardless of the interval.")
 
