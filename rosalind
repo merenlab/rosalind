@@ -167,8 +167,12 @@ class SlurmMonitor:
         """Fetch the current slurm queue status using squeue."""
 
         try:
-            result = subprocess.run(["squeue", "-A", self.group_id, "-o", "%11i %35j %20u %5C %13m %8T %10M %9l %6D %R"],
-                                    capture_output=True, text=True, check=True)
+            if self.group_id:
+                command = ["squeue", "-A", self.group_id, "-o", "%11i %35j %20u %5C %13m %8T %10M %9l %6D %R"]
+            else:
+                command = ["squeue", "-o", "%11i %35j %20u %5C %13m %8T %10M %9l %6D %R"]
+
+            result = subprocess.run(command, capture_output=True, text=True, check=True)
             return result.stdout.strip()
         except subprocess.CalledProcessError as e:
             return f"Error fetching slurm queue: {e}"
@@ -318,7 +322,7 @@ def get_user_args():
 
     parser = argparse.ArgumentParser()
     groupA = parser.add_argument_group('ESSENTIALS', 'Essential information related to Slurm and Slack')
-    groupA.add_argument('--partition', metavar="ID", default=None, help="Your group ID or partition on Slurm. If you "
+    groupA.add_argument('--group-id', metavar="ID", default=None, help="Your group ID or partition on Slurm. If you "
         "have one, you can leave this empty and see what happens (we haven't really tested it lol).")
     groupA.add_argument('--webhook', metavar="URL", default=None, help="Slack web hook for the program to "
         "communicate with you.")
