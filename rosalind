@@ -73,10 +73,10 @@ class SlurmMonitor:
             sys.exit(1)
 
 
-    @staticmethod
-    def parse_time(time_str):
-        """Converts time string from various squeue output formats (D-H:M:S, H:M:S, M:S, S) to a human-readable format."""
+    def get_time(self, time_str, in_seconds=False):
+        """Convert the ugly time format (DD-HH:MM:SS, HH:MM:SS, MM:SS, or SS) into either human readable format, OR into secondss."""
 
+        # parse the time str properly
         if '-' in time_str:
             days, rest = time_str.split('-')
             days = int(days)
@@ -96,17 +96,36 @@ class SlurmMonitor:
                 hours = 0
                 days = 0
 
-        readable_time = []
-        if days:
-            readable_time.append(f"{days}d")
-        if hours:
-            readable_time.append(f"{hours}h")
-        if minutes:
-            readable_time.append(f"{minutes}m")
-        if seconds:
-            readable_time.append(f"{seconds}s")
+        if in_seconds:
+            return days * 86400 + hours * 3600 + minutes * 60 + seconds
+        else:
+            readable_time = []
+            if days:
+                readable_time.append(f"{days}d")
+            if hours:
+                readable_time.append(f"{hours}h")
+            if minutes:
+                readable_time.append(f"{minutes}m")
+            if seconds:
+                readable_time.append(f"{seconds}s")
 
-        return ' '.join(readable_time) if readable_time else "0s"
+            if readable_time:
+                if days:
+                    human_readable_time = f"about {(days * 24) + hours} hours"
+                elif hours:
+                    if hours > 1:
+                        human_readable_time = f"about {hours} hours and {minutes} minutes"
+                    else:
+                        human_readable_time = f"about one hour and {minutes} minutes"
+                elif minutes:
+                    if minutes > 1:
+                        human_readable_time = f"about {minutes} minutes"
+                    else:
+                        human_readable_time = f"about one minute"
+                else:
+                    human_readable_time = "like a few seconds (lol)"
+
+            return human_readable_time
 
 
     def get_random_slack_notification_for_jobs(self, user, event):
