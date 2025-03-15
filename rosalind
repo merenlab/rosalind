@@ -71,15 +71,13 @@ class SlurmMonitor:
             sys.exit(1)
 
 
-
-
     @staticmethod
     def parse_time(time_str):
         """Converts time string from various squeue output formats (D-H:M:S, H:M:S, M:S, S) to a human-readable format."""
 
         if '-' in time_str:
-            day, rest = time_str.split('-')
-            day = int(day)
+            days, rest = time_str.split('-')
+            days = int(days)
             hours, minutes, seconds = list(map(int, rest.split(':')))
         else:
             parts = list(map(int, time_str.split(':')))
