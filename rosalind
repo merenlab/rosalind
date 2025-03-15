@@ -288,15 +288,15 @@ class SlurmMonitor:
             user = self.get_known_user_name(user)
             total_jobs = len(jobs)
             total_cpus = sum(job['CPUS'] for job in jobs)
-            longest_job = max(jobs, key=lambda x: x['TIME'])
+            longest_job = max(jobs, key=lambda x: self.get_time(x['TIME'], in_seconds=True))
             most_recent_job = min(jobs, key=lambda x: x['TIME'])
 
             if total_jobs == 1:
                 summary = (f"> *{user}* has a single job, _{longest_job['NAME']}_, that is using a total of *{total_cpus}* "
-                           f"{'CPUs' if total_cpus > 1 else 'CPU'} and has been running for *{longest_job['TIME']}*.")
+                           f"{'CPUs' if total_cpus > 1 else 'CPU'} and has been running for *{self.get_time(longest_job['TIME'])}*.")
             else:
                 summary = (f"> *{user}* has *{total_jobs}* jobs using a total of *{total_cpus}* CPUs. "
-                           f"The longest job,  _{longest_job['NAME']}_ has been running for *{longest_job['TIME']}* "
+                           f"The longest job, _{longest_job['NAME']}_ has been running for *{self.get_time(longest_job['TIME'])}* "
                            f"and their most recently started job is _{most_recent_job['NAME']}_.")
 
             summaries.append(summary)
