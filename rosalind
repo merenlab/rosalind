@@ -183,19 +183,55 @@ class SlurmMonitor:
             raise ValueError("Invalid event type. Use 'new' or 'finished'.")
 
 
-    def get_slurm_queue(self):
-        """Fetch the current slurm queue status using squeue."""
+    def get_slurm_job_data(self, squeue_output=None):
+        """Fetch the current slurm queue status using squeue and parse it"""
 
-        try:
-            if self.group_id:
-                command = ["squeue", "-A", self.group_id, "-o", "%11i %35j %20u %5C %13m %8T %10M %9l %6D %R"]
-            else:
-                command = ["squeue", "-o", "%11i %35j %20u %5C %13m %8T %10M %9l %6D %R"]
+        # define the columns we want from the squeue along with specific column widths
+        columns_of_interest = "%11i %35j %20u %8C %13m %15T %15M %15l %12D %R"
+        column_widths       = [11, 35, 20, 8, 13, 15, 15, 15, 12, None]
+        column_names        = ["JOBID", "NAME", "USER", "CPUS", "MIN_MEMORY", "STATE", "TIME", "TIME_LIMIT", "NODES", "NODELIST"]
 
-            result = subprocess.run(command, capture_output=True, text=True, check=True)
-            return result.stdout.strip()
-        except subprocess.CalledProcessError as e:
-            return f"Error fetching slurm queue: {e}"
+        # run the command and collect the output
+        if not squeue_output:
+            try:
+                if self.group_id:
+                    command = ["squeue", "-A", self.group_id, "-o", columns_of_interest]
+                else:
+                    command = ["squeue", "-o", columns_of_interest]
+
+                squeue_output = subprocess.run(command, capture_output=True, text=True, check=True)
+            except subprocess.CalledProcessError as e:
+                return f"Error fetching slurm queue: {e}"
+
+        lines = squeue_output.strip().split("\n")
+
+        # fill in the job data
+        job_data = []
+        for line in lines[1:]:
+            parts = []
+            start = 0
+
+            for width in column_widths:
+                if width is None:  # Last column extends to the end
+                    parts.append(line[start:].strip())
+                else:
+                    parts.append(line[start:start + width].strip())
+                    start += width + 1
+
+            job_data.append({
+                "JOBID": parts[0],
+                "NAME": parts[1],
+                "USER": parts[2],
+                "CPUS": int(parts[3]),
+                "MIN_MEMORY": parts[4],
+                "STATE": parts[5],
+                "TIME": parts[6],
+                "TIME_LIMIT": parts[7],
+                "NODES": parts[8],
+                "NODELIST": parts[9]
+            })
+
+        return job_data
 
 
     def get_known_user_name(self, user):
@@ -204,23 +240,24 @@ class SlurmMonitor:
         return self.known_users[user] if user in self.known_users else user
 
 
-    def get_current_users(self, slurm_queue):
+    def get_current_users(self, job_data):
         """Extracts a set of unique users from the Slurm queue output."""
 
-        lines = slurm_queue.strip().split('\n')[1:]
+        if not len(job_data):
+            return set([])
 
-        users = set([self.get_known_user_name(u) for u in [re.split(r'\s+', line, maxsplit=9)[2] for line in lines]])
+        users = set([self.get_known_user_name(j['USER']) for j in job_data])
 
         return users
 
 
-    def check_user_changes(self, slurm_queue=None):
+    def check_user_changes(self, job_data=None):
         """Check for new and finished users and send Slack notifications."""
 
-        if not slurm_queue:
-            slurm_queue = self.get_slurm_queue()
+        if job_data == None:
+            job_data = self.get_slurm_job_data()
 
-        current_users = self.get_current_users(slurm_queue)
+        current_users = self.get_current_users(job_data)
 
         # find out hat has changed
         new_users = current_users - self.previous_users
@@ -235,27 +272,14 @@ class SlurmMonitor:
         self.previous_users = current_users
 
 
-    def summarize_jobs(self, slurm_queue=None):
+    def summarize_jobs(self, job_data=None):
         """Summarizes job statistics per user based on the provided job output."""
 
-        if not slurm_queue:
-            slurm_queue = self.get_slurm_queue()
-
-        lines = slurm_queue.strip().split('\n')
-
-        job_data = []
-        for line in lines[1:]:
-            parts = re.split(r'\s+', line, maxsplit=9)
-            job_data.append({
-                'JOBID': parts[0],
-                'NAME': parts[1],
-                'USER': parts[2],
-                'CPUS': int(parts[3]),
-                'STATE': parts[5],
-                'TIME': self.parse_time(parts[6]),
-            })
+        if job_data == None:
+            job_data = self.get_slurm_job_data()
 
         user_jobs = defaultdict(list)
+
         for job in job_data:
             user_jobs[job['USER']].append(job)
 
@@ -308,15 +332,19 @@ class SlurmMonitor:
             print(f'### {slurm_output_path} ###')
             print('#' * (len(slurm_output_path) + 8))
             print()
+
             slurm_queue = open(slurm_output_path).read()
-            self.check_user_changes(slurm_queue)
-            self.summarize_jobs(slurm_queue)
+            job_data = self.get_slurm_job_data(slurm_queue)
+
+            self.check_user_changes(job_data)
+            self.summarize_jobs(job_data)
+
             time.sleep(1)
 
 
     def __actual_run(self):
-        output = self.get_slurm_queue()
-        self.previous_users = self.get_current_users(output)
+        job_data = self.get_slurm_job_data()
+        self.previous_users = self.get_current_users(job_data)
 
         if self.overall_summary_at_start:
             self.summarize_jobs()
