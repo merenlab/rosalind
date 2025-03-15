@@ -33,6 +33,8 @@ class SlurmMonitor:
         self.stdout_only = A('stdout_only')
         self.testing = A('testing')
 
+        self.quiet_on_days = ['saturday', 'sunday']
+
         if self.testing:
             self.stdout_only = True
 
@@ -266,11 +268,14 @@ class SlurmMonitor:
     def message(self, message):
         """Send a message to Slack using the webhook (or print it to the terminal)"""
 
+        today = datetime.today()
+        day_name = today.strftime("%A").lower()
+
         print('--- Slack Message ---')
         print(message)
         print()
 
-        if self.webhook and not self.stdout_only:
+        if self.webhook and not self.stdout_only and day_name not in self.quiet_on_days:
             payload = {"text": message}
             response = requests.post(self.webhook, json=payload)
             return response.status_code, response.text
