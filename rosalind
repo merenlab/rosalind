@@ -281,24 +281,40 @@ class SlurmMonitor:
         if job_data == None:
             job_data = self.get_slurm_job_data()
 
-        user_jobs = defaultdict(list)
+        # first figure out the order of users based on their CPU usage (so we can order the summary
+        # of all jobs based on CPU usage)
+        user_cpu_usage = defaultdict(int)
 
         for job in job_data:
-            user_jobs[job['USER']].append(job)
+            user_cpu_usage[job['USER']] += job['CPUS']
 
+        users_by_cpu_usage = [user_id for user_id, total_cpus in sorted(user_cpu_usage.items(), key=lambda x: x[1], reverse=True)]
+
+        # next, generate another dict that combines all the jobs that belong to the same user
+        user_jobs = {}
+
+        for job in job_data:
+            user_id = job['USER']
+            if user_id not in user_jobs:
+                user_jobs[user_id] = []
+
+            user_jobs[user_id].append(job)
+
+        # now it is time to build the summary
         summaries = []
-        for user, jobs in user_jobs.items():
-            user = self.get_known_user_name(user)
+        for user_id in users_by_cpu_usage:
+            user_name = self.get_known_user_name(user_id)
+            jobs = user_jobs[user_id]
             total_jobs = len(jobs)
             total_cpus = sum(job['CPUS'] for job in jobs)
             longest_job = max(jobs, key=lambda x: self.get_time(x['TIME'], in_seconds=True))
             most_recent_job = min(jobs, key=lambda x: x['TIME'])
 
             if total_jobs == 1:
-                summary = (f"> *{user}* has a single job, _{longest_job['NAME']}_, that is using a total of *{total_cpus}* "
+                summary = (f"> *{user_name}* has a single job, _{longest_job['NAME']}_, that is using a total of *{total_cpus}* "
                            f"{'CPUs' if total_cpus > 1 else 'CPU'} and has been running for *{self.get_time(longest_job['TIME'])}*.")
             else:
-                summary = (f"> *{user}* has *{total_jobs}* jobs using a total of *{total_cpus}* CPUs. "
+                summary = (f"> *{user_name}* has *{total_jobs}* jobs using a total of *{total_cpus}* CPUs. "
                            f"The longest job, _{longest_job['NAME']}_ has been running for *{self.get_time(longest_job['TIME'])}* "
                            f"and their most recently started job is _{most_recent_job['NAME']}_.")
 
