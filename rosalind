@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8
 
-import re
 import sys
 import time
 import glob
@@ -121,11 +120,11 @@ class SlurmMonitor:
                     if minutes > 1:
                         human_readable_time = f"about {minutes} minutes"
                     else:
-                        human_readable_time = f"about one minute"
+                        human_readable_time = "about one minute"
                 else:
                     human_readable_time = "like a few seconds (lol)"
 
-            return human_readable_time
+                return human_readable_time
 
 
     def get_random_slack_notification_for_jobs(self, user, event):
