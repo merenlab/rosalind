@@ -198,7 +198,8 @@ class SlurmMonitor:
                 else:
                     command = ["squeue", "-o", columns_of_interest]
 
-                squeue_output = subprocess.run(command, capture_output=True, text=True, check=True)
+                response = subprocess.run(command, capture_output=True, text=True, check=True)
+                squeue_output = response.stdout
             except subprocess.CalledProcessError as e:
                 return f"Error fetching slurm queue: {e}"
 
