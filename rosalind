@@ -182,7 +182,7 @@ class SlurmMonitor:
             raise ValueError("Invalid event type. Use 'new' or 'finished'.")
 
 
-    def get_slurm_job_data(self, squeue_output=None):
+    def get_slurm_job_data(self, squeue_output=None, job_state="RUNNING"):
         """Fetch the current slurm queue status using squeue and parse it"""
 
         # define the columns we want from the squeue along with specific column widths
@@ -218,7 +218,7 @@ class SlurmMonitor:
                     parts.append(line[start:start + width].strip())
                     start += width + 1
 
-            job_data.append({
+            job = {
                 "JOBID": parts[0],
                 "NAME": parts[1],
                 "USER": parts[2],
@@ -229,7 +229,10 @@ class SlurmMonitor:
                 "TIME_LIMIT": parts[7],
                 "NODES": parts[8],
                 "NODELIST": parts[9]
-            })
+            }
+
+            if job['STATE'] == job_state:
+                job_data.append(job)
 
         return job_data
 
