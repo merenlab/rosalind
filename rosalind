@@ -41,7 +41,10 @@ class SlurmMonitor:
         self.previous_users = set([])
 
         # this shouldn't be here, but I will keep it here until there is a
-        # second user of this program :p
+        # second user of this program :p For each entry, The key is the
+        # username on the UNIX system, and the value is the Slack ID of that
+        # person (if exists). You can learn the Slack ID for a given user
+        # by simply looking at their profile using the Slack application.
         self.known_users = {"tepp5511": "<@U08H4G2UV>", # meren
                             "elgo4396": "<@UCE940CG0>", # iva
                             "patz5242": "<@UDKBXCF1R>", # florian
@@ -137,7 +140,7 @@ class SlurmMonitor:
             f"New ROSA jobs incoming for *{user}*! :computer:",
             f"*{user}* has new jobs running on ROSA. :chart_with_upwards_trend:",
             f"Looks like *{user}* is keeping ROSA busy again! :hourglass_flowing_sand:",
-            f"Incoming workload detected! *{user}* has jobs in the queue! :robot:",
+            f"Incoming workload detected! *{user}* has jobs in the queue! :robot_face:",
             f"New jobs for *{user}* on ROSA. :gear:",
             f"Brace yourselves, *{user}*’s jobs are running on ROSA! :zap:",
             f"Guess who’s back? It’s *{user}* with more jobs on ROSA! :sunglasses:",
@@ -161,7 +164,7 @@ class SlurmMonitor:
             f"Break time! *{user}*’s jobs are all completed. :coffee:",
             f"All clear! *{user}* has no active jobs on ROSA. :white_check_mark:",
             f"Another batch bites the dust! *{user}* is all done. :boom:",
-            f"Processing complete! *{user}*’s jobs are no more! :robot:",
+            f"Processing complete! *{user}*’s jobs are no more! :robot_face:",
             f"Compute cycle complete! *{user}* has finished all jobs! :star:",
             f"All of *{user}*’s jobs have crossed the finish line! :checkered_flag:",
             f"ROSA says goodbye to *{user}*’s jobs. Until next time! :wave:",
