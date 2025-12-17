@@ -19,25 +19,6 @@ from collections import defaultdict
 DEFAULT_CONFIG_FILENAME = "config.yaml"
 
 
-def load_config(config_file=None):
-    """Load YAML config that holds environment-specific settings."""
-
-    try:
-        import yaml
-    except ImportError as e:  # pragma: no cover - dependency check
-        raise RuntimeError("PyYAML is required to load configuration. Install it with `pip install pyyaml`.") from e
-
-    config_path = Path(config_file) if config_file else Path(__file__).with_name(DEFAULT_CONFIG_FILENAME)
-
-    if not config_path.is_file():
-        template_path = config_path.with_suffix(config_path.suffix + ".template")
-        hint = f" Copy the template with `cp {template_path} {config_path}` and fill in your secrets." if template_path.is_file() else ""
-        raise RuntimeError(f"Missing config file at '{config_path}'. Provide one via --config-file.{hint}")
-
-    with config_path.open() as handle:
-        return yaml.safe_load(handle) or {}
-
-
 class SlurmMonitor:
     def __init__(self, args):
         self.args = args
@@ -46,7 +27,7 @@ class SlurmMonitor:
         A = lambda x: self.args.__dict__[x] if x in self.args.__dict__ else None
         self.webhook = None
         self.group_id = A('group_id')
-        self.config = load_config(A('config_file'))
+        self.config = self._load_config(A('config_file'))
         self.slack_token = self.config.get("slack_token")
 
         self.check_interval = A('squeue_check_interval')
@@ -401,6 +382,25 @@ class SlurmMonitor:
             self.__test_run()
         else:
             self.__actual_run()
+
+    @staticmethod
+    def _load_config(config_file=None):
+        """Load YAML config that holds environment-specific settings."""
+
+        try:
+            import yaml
+        except ImportError as e:  # pragma: no cover - dependency check
+            raise RuntimeError("PyYAML is required to load configuration. Install it with `pip install pyyaml`.") from e
+
+        config_path = Path(config_file) if config_file else Path(__file__).with_name(DEFAULT_CONFIG_FILENAME)
+
+        if not config_path.is_file():
+            template_path = config_path.with_suffix(config_path.suffix + ".template")
+            hint = f" Copy the template with `cp {template_path} {config_path}` and fill in your secrets." if template_path.is_file() else ""
+            raise RuntimeError(f"Missing config file at '{config_path}'. Provide one via --config-file.{hint}")
+
+        with config_path.open() as handle:
+            return yaml.safe_load(handle) or {}
 
 
 def get_user_args():
