@@ -5,7 +5,7 @@ Rosalind is a bot that sends updates to a Slack channel regarding the HPC usage.
 
 If you want to give it a go, you need to
 
-1. Have a webhook `rosalind` can use. For which you will need to [create a Slack App](https://api.slack.com/apps). Creating a Slack App is very simple, and it is explained in various resources. Essentially, [THIS](https://github.com/user-attachments/assets/a45dc7bf-ab87-4af9-8d1a-5c33085a4c96) is how your [Slack Apps](https://api.slack.com/apps) page should look like (you can call it anything you want, of course, and it doesn't have to be called 'rosalind'), with [these](https://github.com/user-attachments/assets/d9ad9f3a-7089-4e48-9f8a-6be6a0f6bb1a) permissions. 
+1. Have a webhook `rosalind` can use. For which you will need to [create a Slack App](https://api.slack.com/apps). Creating a Slack App is very simple, and it is explained in various resources. Essentially, [THIS](https://github.com/user-attachments/assets/a45dc7bf-ab87-4af9-8d1a-5c33085a4c96) is how your [Slack Apps](https://api.slack.com/apps) page should look like (you can call it anything you want, of course, and it doesn't have to be called 'rosalind'), with [these](https://github.com/user-attachments/assets/d9ad9f3a-7089-4e48-9f8a-6be6a0f6bb1a) permissions.
 
 2. Add your new app to your Slack workspace (such as Meren Lab). The relevant page should look like [this](https://github.com/user-attachments/assets/f2f2bd8c-3239-4908-a219-568ff4c64161).
 
@@ -19,14 +19,22 @@ cd ~/github
 git clone https://github.com/merenlab/rosalind.git
 ```
 
-5. Run `rosalind`:
+5. Install PyYAML (used to read the config file):
+
+```bash
+python -m pip install pyyaml
+```
+
+6. Update `config.yaml` to match your environment (cluster name, Slack bot mention, quiet days, and user-to-Slack-ID map). The provided file holds our defaults; feel free to copy it and adjust values (or point `--config-file` at an alternate YAML).
+
+7. Run `rosalind`:
 
 ```bash
 cd ~/github/rosalind
 ./rosalind --webhook YOUR_WEBHOOK_URL --overall-summary-at-start
 ```
 
-6. You can also run `rosalind` forever on the head node of your slurm environment using `screen`, so you can safely logout while it continues to send updates to your Slack environment.
+8. You can also run `rosalind` forever on the head node of your slurm environment using `screen`, so you can safely logout while it continues to send updates to your Slack environment.
 
 ---
 
