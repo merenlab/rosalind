@@ -11,6 +11,8 @@ import argparse
 import requests
 import subprocess
 
+import json
+import tempfile
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
@@ -29,6 +31,8 @@ class SlurmMonitor:
         self.group_id = A('group_id')
         self.config = self._load_config(A('config_file'))
         self.slack_token = self.config.get("slack_token")
+        raw_channel = self.config.get("slack_channel")
+        self.slack_channel = raw_channel[1:] if isinstance(raw_channel, str) and raw_channel.startswith("#") else raw_channel
 
         self.check_interval = A('squeue_check_interval')
         self.user_jobs_interval = A('user_jobs_interval')
@@ -42,6 +46,8 @@ class SlurmMonitor:
         self.bot_mention = self.config.get("bot_mention", "<@rosalind>")
         self.quiet_on_days = [day.lower() for day in self.config.get("quiet_on_days", [])]
         self.known_users = self.config.get("known_users", {})
+        self.usage_log_path = Path(self.config.get("usage_log_path", Path(__file__).with_name("usage_metrics.json")))
+        self.usage_retention_days = self.config.get("usage_retention_days", 7)
 
         # secrets (webhook/token) must come from config
         self.webhook = self.config.get("webhook")
@@ -320,6 +326,7 @@ class SlurmMonitor:
         if len(jobs_summary):
             message = f"""A *status update* from {self.cluster_name} (by {self.bot_mention} on head node _{platform.node()}_ at *{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}*)\n\n{jobs_summary}"""
             self.message(message)
+            self._maybe_upload_usage_figure()
 
 
     def message(self, message):
@@ -339,6 +346,178 @@ class SlurmMonitor:
         else:
             return None, None
 
+    def log_usage(self, job_data):
+        """Persist lightweight usage metrics for later visualization."""
+
+        timestamp = datetime.utcnow().isoformat() + "Z"
+        total_cpus = sum(job["CPUS"] for job in job_data) if job_data else 0
+        total_jobs = len(job_data)
+        total_nodes = self._count_unique_nodes(job_data)
+        total_mem_mb = sum(self._parse_mem_to_mb(job.get("MIN_MEMORY", "")) for job in job_data)
+
+        entry = {
+            "timestamp": timestamp,
+            "total_cpus": total_cpus,
+            "total_jobs": total_jobs,
+            "total_nodes": total_nodes,
+            "total_mem_mb": total_mem_mb
+        }
+
+        existing = []
+        try:
+            if self.usage_log_path.is_file():
+                existing = json.loads(self.usage_log_path.read_text())
+        except Exception:
+            existing = []
+
+        cutoff = datetime.utcnow().timestamp() - (self.usage_retention_days * 86400)
+        pruned = []
+        for row in existing:
+            try:
+                ts = datetime.fromisoformat(row["timestamp"].replace("Z", "")).timestamp()
+                if ts >= cutoff:
+                    pruned.append(row)
+            except Exception:
+                continue
+
+        pruned.append(entry)
+
+        try:
+            self.usage_log_path.parent.mkdir(parents=True, exist_ok=True)
+            self.usage_log_path.write_text(json.dumps(pruned, indent=2))
+        except Exception as e:
+            print(f"Warning: could not write usage log: {e}")
+
+    def _parse_mem_to_mb(self, mem_str):
+        """Parse Slurm memory strings like 4000M, 4G into MB; best effort."""
+
+        if not mem_str:
+            return 0
+
+        try:
+            if mem_str.lower().endswith('g'):
+                return float(mem_str[:-1]) * 1024
+            if mem_str.lower().endswith('m'):
+                return float(mem_str[:-1])
+            if mem_str.lower().endswith('k'):
+                return float(mem_str[:-1]) / 1024
+            return float(mem_str) / (1024 * 1024)  # assume bytes
+        except Exception:
+            return 0
+
+    def _count_unique_nodes(self, job_data):
+        """Count unique nodes from NODELIST entries."""
+
+        nodes = set()
+        for job in job_data:
+            nodelist = job.get("NODELIST", "")
+            if not nodelist or nodelist in ("(null)", "None"):
+                continue
+            for token in nodelist.replace('+', ',').split(','):
+                token = token.strip()
+                if token:
+                    nodes.add(token)
+        return len(nodes)
+
+    def _maybe_upload_usage_figure(self):
+        """Generate usage figure and upload/save depending on configuration."""
+
+        figure_output_path = self.usage_log_path.with_suffix(".png")
+        figure_path = self._build_usage_figure(output_path=figure_output_path)
+        if not figure_path:
+            return
+
+        if not self.slack_token or not self.slack_channel:
+            print(f"Usage figure saved to {figure_path} (Slack upload not configured).")
+            return
+
+        try:
+            with open(figure_path, "rb") as fh:
+                response = requests.post(
+                    "https://slack.com/api/files.upload",
+                    headers={"Authorization": f"Bearer {self.slack_token}"},
+                    data={
+                        "channels": self.slack_channel,
+                        "title": f"Usage for {self.cluster_name}",
+                    },
+                    files={"file": fh}
+                )
+            if response.status_code != 200 or not response.json().get("ok"):
+                print(f"Warning: failed to upload usage figure to Slack: {response.text}")
+        except Exception as e:
+            print(f"Warning: exception during Slack upload: {e}")
+
+    def _build_usage_figure(self, output_path=None):
+        """Build usage plots for nodes/CPUs/memory over available data (max one week)."""
+
+        try:
+            import matplotlib.pyplot as plt
+            import matplotlib.dates as mdates
+        except ImportError:
+            print("matplotlib not available; skipping usage figure.")
+            return None
+
+        if not self.usage_log_path.is_file():
+            return None
+
+        try:
+            data = json.loads(self.usage_log_path.read_text())
+        except Exception:
+            return None
+
+        now_ts = datetime.utcnow().timestamp()
+        cutoff_ts = now_ts - (7 * 24 * 3600)
+        points = []
+        for row in data:
+            try:
+                ts = datetime.fromisoformat(row["timestamp"].replace("Z", "")).timestamp()
+            except Exception:
+                continue
+            if ts >= cutoff_ts:
+                points.append((datetime.fromtimestamp(ts), row))
+
+        if not points:
+            return None
+
+        times = [p[0] for p in points]
+        cpus = [p[1].get("total_cpus", 0) for p in points]
+        nodes = [p[1].get("total_nodes", 0) for p in points]
+        mem_gb = [p[1].get("total_mem_mb", 0) / 1024 for p in points]
+
+        # use a pleasant style if available
+        try:
+            plt.style.use("seaborn-v0_8-darkgrid")
+        except Exception:
+            plt.style.use("ggplot")
+
+        fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(9, 10), sharex=True, constrained_layout=True)
+        plots = [
+            ("CPUs", cpus, "#1f77b4"),
+            ("Nodes", nodes, "#2ca02c"),
+            ("Memory (GB)", mem_gb, "#d62728"),
+        ]
+
+        for ax, (label, series, color) in zip(axes, plots):
+            if not series:
+                ax.set_title(f"{label} (no data)")
+                ax.axis('off')
+                continue
+            ax.plot(times, series, color=color, linewidth=2.2)
+            ax.set_title(label)
+            ax.grid(True, alpha=0.3)
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d\n%H:%M"))
+
+        if output_path:
+            output_path = Path(output_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            png_path = str(output_path)
+        else:
+            fd, png_path = tempfile.mkstemp(prefix="rosalind_usage_", suffix=".png")
+
+        plt.savefig(png_path, dpi=150)
+        plt.close(fig)
+        return png_path
+
 
     def __test_run(self):
         for slurm_output_path in glob.glob('sandbox/slurm-outputs-for-testing/*.txt'):
@@ -352,6 +531,7 @@ class SlurmMonitor:
 
             self.check_user_changes(job_data)
             self.summarize_jobs(job_data)
+            self.log_usage(job_data)
 
             time.sleep(1)
 
@@ -361,16 +541,20 @@ class SlurmMonitor:
         self.previous_users = self.get_current_users(job_data)
 
         if self.overall_summary_at_start:
-            self.summarize_jobs()
+            self.summarize_jobs(job_data)
 
         while True:
-            if int(time.time()) % self.user_jobs_interval < 60:
-                # runs every minute
-                self.check_user_changes()
+            loop_start = int(time.time())
+            job_data = self.get_slurm_job_data()
+            self.log_usage(job_data)
 
-            if int(time.time()) % self.overall_summary_interval < 60:
-                # runs every 6 hour-cycle
-                self.summarize_jobs()
+            if loop_start % self.user_jobs_interval < self.check_interval:
+                # runs every minute (or custom interval)
+                self.check_user_changes(job_data)
+
+            if loop_start % self.overall_summary_interval < self.check_interval:
+                # runs every summary interval
+                self.summarize_jobs(job_data)
 
             time.sleep(self.check_interval)
 
