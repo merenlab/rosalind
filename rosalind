@@ -234,18 +234,7 @@ class SlurmMonitor:
                     parts.append(line[start:start + width].strip())
                     start += width + 1
 
-            job = {
-                "JOBID": parts[0],
-                "NAME": parts[1],
-                "USER": parts[2],
-                "CPUS": int(parts[3]),
-                "MIN_MEMORY": parts[4],
-                "STATE": parts[5],
-                "TIME": parts[6],
-                "TIME_LIMIT": parts[7],
-                "NODES": parts[8],
-                "NODELIST": parts[9]
-            }
+            job = {name: (int(value) if name == "CPUS" else value) for name, value in zip(column_names, parts)}
 
             if job['STATE'] == job_state:
                 job_data.append(job)
