@@ -1,3 +1,6 @@
+webhook: "https://hooks.slack.com/services/XXX/YYY/ZZZ"  # required
+slack_token: ""  # optional: xoxb-... token for uploads (keep empty if not used)
+
 cluster_name: "ROSA"
 bot_mention: "<@rosalind>"
 
@@ -41,10 +44,10 @@ known_users:
     name: "Jessika"
   woes6158:
     slack: "<@U08RQ2R88H5>"
-    name: "Sophia Fatima"
+    name: "Sophia"
   mueb6691:
     slack: "Matthias Weitz"
-    name: "Matthias Weitz"
+    name: "Matthias"
   wazo2883:
     slack: "<@U09L3CLRZNH>"
     name: "Nithin"
