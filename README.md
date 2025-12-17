@@ -30,7 +30,7 @@ python -m pip install pyyaml
 ```bash
 cd ~/github/rosalind
 cp config.yaml.template config.yaml
-# edit config.yaml to set webhook, slack_token, cluster name, quiet days, and user map
+# edit config.yaml to set webhook, slack_token (optional), slack_channel (ID preferred; name ok with or without #), cluster name, quiet days, user map, and (only if you know what you're doing) usage_log_path/usage_retention_days
 ```
 
 7. Run `rosalind`:
