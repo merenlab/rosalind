@@ -1,0 +1,53 @@
+cluster_name: "ROSA"
+bot_mention: "<@rosalind>"
+
+quiet_on_days:
+  - saturday
+  - sunday
+
+known_users:
+  tepp5511:
+    slack: "<@U08H4G2UV>"
+    name: "Meren"
+  elgo4396:
+    slack: "<@UCE940CG0>"
+    name: "Iva"
+  patz5242:
+    slack: "<@UDKBXCF1R>"
+    name: "Florian"
+  bube0466:
+    slack: "<@U03N57D5PF0>"
+    name: "Mete"
+  gegu0440:
+    slack: "<@U0677CTPU2J>"
+    name: "Xixi"
+  larm6177:
+    slack: "<@U05A89NS5QT>"
+    name: "Sarah"
+  tele0144:
+    slack: "<@U041JV3L1GX>"
+    name: "Alex"
+  xuaf2725:
+    slack: "<@U05SYDN0QKU>"
+    name: "Katy"
+  sore6591:
+    slack: "<@U06GGGRPZ18>"
+    name: "Avril"
+  jert0988:
+    slack: "<@U0106BK0S3Y>"
+    name: "Amy"
+  zina4710:
+    slack: "<@UHYU10DTK>"
+    name: "Jessika"
+  woes6158:
+    slack: "<@U08RQ2R88H5>"
+    name: "Sophia Fatima"
+  mueb6691:
+    slack: "Matthias Weitz"
+    name: "Matthias Weitz"
+  wazo2883:
+    slack: "<@U09L3CLRZNH>"
+    name: "Nithin"
+  gebi9651:
+    slack: "<@UQ4S17CLU>"
+    name: "Sam"

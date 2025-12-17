@@ -11,8 +11,29 @@ import argparse
 import requests
 import subprocess
 
+from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
+
+
+DEFAULT_CONFIG_FILENAME = "config.yaml"
+
+
+def load_config(config_file=None):
+    """Load YAML config that holds environment-specific settings."""
+
+    try:
+        import yaml
+    except ImportError as e:  # pragma: no cover - dependency check
+        raise RuntimeError("PyYAML is required to load configuration. Install it with `pip install pyyaml`.") from e
+
+    config_path = Path(config_file) if config_file else Path(__file__).with_name(DEFAULT_CONFIG_FILENAME)
+
+    if not config_path.is_file():
+        raise RuntimeError(f"Missing config file at '{config_path}'. Provide one via --config-file.")
+
+    with config_path.open() as handle:
+        return yaml.safe_load(handle) or {}
 
 
 class SlurmMonitor:
@@ -23,6 +44,7 @@ class SlurmMonitor:
         A = lambda x: self.args.__dict__[x] if x in self.args.__dict__ else None
         self.webhook = A('webhook')
         self.group_id = A('group_id')
+        self.config = load_config(A('config_file'))
 
         self.check_interval = A('squeue_check_interval')
         self.user_jobs_interval = A('user_jobs_interval')
@@ -32,35 +54,12 @@ class SlurmMonitor:
         self.stdout_only = A('stdout_only')
         self.testing = A('testing')
 
-        self.quiet_on_days = ['saturday', 'sunday']
 
         if self.testing:
             self.stdout_only = True
 
         # some default variables
         self.previous_users = set([])
-
-        # this shouldn't be here, but I will keep it here until there is a
-        # second user of this program :p For each entry, The key is the
-        # username on the UNIX system, and the value is the Slack ID of that
-        # person (if exists). You can learn the Slack ID for a given user
-        # by simply looking at their profile using the Slack application.
-        self.known_users = {"tepp5511": "<@U08H4G2UV>", # meren
-                            "elgo4396": "<@UCE940CG0>", # iva
-                            "patz5242": "<@UDKBXCF1R>", # florian
-                            "bube0466": "<@U03N57D5PF0>", # mete
-                            "gegu0440": "<@U0677CTPU2J>", # xixi
-                            "larm6177": "<@U05A89NS5QT>", # sarah
-                            "tele0144": "<@U041JV3L1GX>", # alex
-                            "xuaf2725": "<@U05SYDN0QKU>", # katy
-                            "sore6591": "<@U06GGGRPZ18>", # avril
-                            "jert0988": "<@U0106BK0S3Y>", # amy
-                            "zina4710": "<@UHYU10DTK>", # jessika
-                            'woes6158': "<@U08RQ2R88H5>", # sophia fatima
-                            "mueb6691": "Matthias Weitz", # matthias
-                            "wazo2883": "<@U09L3CLRZNH>", # nithin
-                            "gebi9651": "<@UQ4S17CLU>", # Sam
-                            }
 
         try:
             if not shutil.which("squeue") and not self.testing:
@@ -244,9 +243,12 @@ class SlurmMonitor:
 
 
     def get_known_user_name(self, user):
-        """Replaces ROSA user ID with known user ID when applicable"""
+        """Return friendly identifier for a user (Slack mention, name, or fallback to user id)."""
 
-        return self.known_users[user] if user in self.known_users else user
+        entry = self.known_users.get(user)
+        if isinstance(entry, dict):
+            return entry.get("slack") or entry.get("name") or user
+        return entry if entry else user
 
 
     def get_current_users(self, job_data):
@@ -329,7 +331,7 @@ class SlurmMonitor:
         jobs_summary = '\n\n'.join(summaries)
 
         if len(jobs_summary):
-            message = f"""A *status update* from ROSA (by <@rosalind> on head node _{platform.node()}_ at *{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}*)\n\n{jobs_summary}"""
+            message = f"""A *status update* from {self.cluster_name} (by {self.bot_mention} on head node _{platform.node()}_ at *{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}*)\n\n{jobs_summary}"""
             self.message(message)
 
 
