@@ -403,7 +403,7 @@ def get_user_args():
     parser = argparse.ArgumentParser()
     groupA = parser.add_argument_group('ESSENTIALS', 'Essential information related to Slurm and Slack')
     groupA.add_argument('--group-id', metavar="ID", default=None, help="Your group ID or partition on Slurm. If you "
-        "have one, you can leave this empty and see what happens (we haven't really tested it lol).")
+        "don't have one, you can leave this empty and see what happens (we haven't really tested it lol).")
     groupA.add_argument('--webhook', metavar="URL", default=None, help="Slack web hook for the program to "
         "communicate with you.")
 
