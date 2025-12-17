@@ -47,6 +47,7 @@ class SlurmMonitor:
         self.webhook = None
         self.group_id = A('group_id')
         self.config = load_config(A('config_file'))
+        self.slack_token = self.config.get("slack_token")
 
         self.check_interval = A('squeue_check_interval')
         self.user_jobs_interval = A('user_jobs_interval')
@@ -60,6 +61,9 @@ class SlurmMonitor:
         self.bot_mention = self.config.get("bot_mention", "<@rosalind>")
         self.quiet_on_days = [day.lower() for day in self.config.get("quiet_on_days", [])]
         self.known_users = self.config.get("known_users", {})
+
+        # secrets (webhook/token) must come from config
+        self.webhook = self.config.get("webhook")
 
         self.new_job_messages = [
             "There are new jobs on {cluster} for *{user}*! Buckle up! :rocket:",
