@@ -54,6 +54,11 @@ class SlurmMonitor:
         self.stdout_only = A('stdout_only')
         self.testing = A('testing')
 
+        self.cluster_name = self.config.get("cluster_name", "your cluster")
+        self.bot_mention = self.config.get("bot_mention", "<@rosalind>")
+        self.quiet_on_days = [day.lower() for day in self.config.get("quiet_on_days", [])]
+        self.known_users = self.config.get("known_users", {})
+
 
         if self.testing:
             self.stdout_only = True
