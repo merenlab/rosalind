@@ -25,13 +25,19 @@ git clone https://github.com/merenlab/rosalind.git
 python -m pip install pyyaml
 ```
 
-6. Update `config.yaml` to match your environment (cluster name, Slack bot mention, quiet days, and user-to-Slack-ID map). The provided file holds our defaults; feel free to copy it and adjust values (or point `--config-file` at an alternate YAML).
+6. Copy the template config and fill it with your webhook (and bot token if you want file uploads) plus other preferences:
+
+```bash
+cd ~/github/rosalind
+cp config.yaml.template config.yaml
+# edit config.yaml to set webhook, slack_token, cluster name, quiet days, and user map
+```
 
 7. Run `rosalind`:
 
 ```bash
 cd ~/github/rosalind
-./rosalind --webhook YOUR_WEBHOOK_URL --overall-summary-at-start
+./rosalind --overall-summary-at-start
 ```
 
 8. You can also run `rosalind` forever on the head node of your slurm environment using `screen`, so you can safely logout while it continues to send updates to your Slack environment.
