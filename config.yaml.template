@@ -1,5 +1,6 @@
 webhook: "https://hooks.slack.com/services/XXX/YYY/ZZZ"  # required
 slack_token: ""  # optional: xoxb-... token for uploads (keep empty if not used)
+slack_channel: ""  # optional: channel ID (preferred, e.g., C0123456789) or channel name (with or without #, e.g., hpc-usage or #hpc-usage)
 
 cluster_name: "ROSA"
 bot_mention: "<@rosalind>"
@@ -7,6 +8,10 @@ bot_mention: "<@rosalind>"
 quiet_on_days:
   - saturday
   - sunday
+
+# optionally change where usage logs are stored (defaults next to script)
+usage_log_path: "usage_metrics.json"  # change only if you know what you're doing
+usage_retention_days: 7  # change only if you know what you're doing
 
 known_users:
   tepp5511:
