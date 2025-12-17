@@ -59,6 +59,48 @@ class SlurmMonitor:
         self.quiet_on_days = [day.lower() for day in self.config.get("quiet_on_days", [])]
         self.known_users = self.config.get("known_users", {})
 
+        self.new_job_messages = [
+            "There are new jobs on {cluster} for *{user}*! Buckle up! :rocket:",
+            "Heads up, *{user}*! Fresh jobs just landed on {cluster}! :eyes:",
+            "Hey *{user}*, your jobs just hit the queue! :construction_worker:",
+            "New {cluster} jobs incoming for *{user}*! :computer:",
+            "*{user}* has new jobs running on {cluster}. :chart_with_upwards_trend:",
+            "Looks like *{user}* is keeping {cluster} busy again! :hourglass_flowing_sand:",
+            "Incoming workload detected! *{user}* has jobs in the queue! :robot_face:",
+            "New jobs for *{user}* on {cluster}. :gear:",
+            "Brace yourselves, *{user}*'s jobs are running on {cluster}! :zap:",
+            "Guess who's back? It's *{user}* with more jobs on {cluster}! :sunglasses:",
+            "{cluster}'s got work to do! *{user}* just submitted new jobs! :fire:",
+            "Hey *{user}*, your jobs are officially in action on {cluster}! :runner:",
+            "New SLURM jobs detected! *{user}* is on a roll? :clipboard:",
+            "Great news: *{user}* has new jobs in {cluster}'s pipeline! :brain:",
+            "All systems go! *{user}* has jobs running on {cluster}! :rocket:",
+            "New jobs alert! *{user}* is back at it on {cluster}! :alarm_clock:",
+            "Time to put {cluster} to work! *{user}* just submitted some jobs! :computer:",
+            "Processing request confirmed! *{user}*'s jobs are in the system! :white_check_mark:"
+        ]
+        self.finished_job_messages = [
+            "Mission accomplished! All {cluster} jobs by *{user}* are done! :tada:",
+            "No more jobs for *{user}*! {cluster} can finally take a breather. :relieved:",
+            "*{user}*'s jobs have wrapped up! Time to celebrate! :champagne:",
+            "That's a wrap! *{user}* has no more jobs on {cluster}! :clapper:",
+            "All jobs done! *{user}* can rest easy now. :sleeping:",
+            "{cluster} just finished running all jobs by *{user}*! Nice work! :muscle:",
+            "Break time! *{user}*'s jobs are all completed. :coffee:",
+            "All clear! *{user}* has no active jobs on {cluster}. :white_check_mark:",
+            "Another batch bites the dust! *{user}* is all done. :boom:",
+            "Processing complete! *{user}*'s jobs are no more! :robot_face:",
+            "Compute cycle complete! *{user}* has finished all jobs! :star:",
+            "All of *{user}*'s jobs have crossed the finish line! :checkered_flag:",
+            "{cluster} says goodbye to *{user}*'s jobs. Until next time! :wave:",
+            "No more crunching numbers for *{user}*! Jobs are done! :bar_chart:",
+            "All of *{user}*'s computations are history! :scroll:",
+            "Ding! *{user}*'s job queue is empty now! :bell:",
+            "Nothing left in the {cluster} queue for *{user}*! :ghost:",
+            "Job execution complete! *{user}*'s tasks are finished! :white_check_mark:",
+            "Well done, *{user}*! All your {cluster} jobs are complete. :sports_medal:",
+            "{cluster} is free from *{user}*'s jobs! :bird:"
+        ]
 
         if self.testing:
             self.stdout_only = True
@@ -138,58 +180,22 @@ class SlurmMonitor:
 
 
     def get_random_slack_notification_for_jobs(self, user, event):
-        """Generates a random SLURM notification message for Slack for new/finished jobs on ROSA by a given user."""
-
-        new_job_messages = [
-            f"There are new jobs on ROSA for *{user}*! Buckle up! :rocket:",
-            f"Heads up, *{user}*! Fresh jobs just landed on ROSA! :eyes:",
-            f"Hey *{user}*, your jobs just hit the queue! :construction_worker:",
-            f"New ROSA jobs incoming for *{user}*! :computer:",
-            f"*{user}* has new jobs running on ROSA. :chart_with_upwards_trend:",
-            f"Looks like *{user}* is keeping ROSA busy again! :hourglass_flowing_sand:",
-            f"Incoming workload detected! *{user}* has jobs in the queue! :robot_face:",
-            f"New jobs for *{user}* on ROSA. :gear:",
-            f"Brace yourselves, *{user}*’s jobs are running on ROSA! :zap:",
-            f"Guess who’s back? It’s *{user}* with more jobs on ROSA! :sunglasses:",
-            f"ROSA’s got work to do! *{user}* just submitted new jobs! :fire:",
-            f"Hey *{user}*, your jobs are officially in action on ROSA! :runner:",
-            f"New SLURM jobs detected! *{user}* is on a roll? :clipboard:",
-            f"Great news: *{user}* has new jobs in ROSA’s pipeline! :brain:",
-            f"All systems go! *{user}* has jobs running on ROSA! :rocket:",
-            f"New jobs alert! *{user}* is back at it on ROSA! :alarm_clock:",
-            f"Time to put ROSA to work! *{user}* just submitted some jobs! :computer:",
-            f"Processing request confirmed! *{user}*’s jobs are in the system! :white_check_mark:"
-        ]
-
-        finished_job_messages = [
-            f"Mission accomplished! All ROSA jobs by *{user}* are done! :tada:",
-            f"No more jobs for *{user}*! ROSA can finally take a breather. :relieved:",
-            f"*{user}*’s jobs have wrapped up! Time to celebrate! :champagne:",
-            f"That’s a wrap! *{user}* has no more jobs on ROSA! :clapper:",
-            f"All jobs done! *{user}* can rest easy now. :sleeping:",
-            f"ROSA just finished running all jobs by *{user}*! Nice work! :muscle:",
-            f"Break time! *{user}*’s jobs are all completed. :coffee:",
-            f"All clear! *{user}* has no active jobs on ROSA. :white_check_mark:",
-            f"Another batch bites the dust! *{user}* is all done. :boom:",
-            f"Processing complete! *{user}*’s jobs are no more! :robot_face:",
-            f"Compute cycle complete! *{user}* has finished all jobs! :star:",
-            f"All of *{user}*’s jobs have crossed the finish line! :checkered_flag:",
-            f"ROSA says goodbye to *{user}*’s jobs. Until next time! :wave:",
-            f"No more crunching numbers for *{user}*! Jobs are done! :bar_chart:",
-            f"All of *{user}*’s computations are history! :scroll:",
-            f"Ding! *{user}*’s job queue is empty now! :bell:",
-            f"Nothing left in the ROSA queue for *{user}*! :ghost:",
-            f"Job execution complete! *{user}*’s tasks are finished! :white_check_mark:",
-            f"Well done, *{user}*! All your ROSA jobs are complete. :sports_medal:",
-            f"ROSA is free from *{user}*'s jobs! :bird:"
-        ]
+        """Generates a random SLURM notification message for Slack for new/finished jobs by a given user."""
 
         if event == "new":
-            return random.choice(new_job_messages)
+            templates = self.new_job_messages
+            default_template = "{user} has new jobs on {cluster}."
         elif event == "finished":
-            return random.choice(finished_job_messages)
+            templates = self.finished_job_messages
+            default_template = "All jobs for {user} finished on {cluster}."
         else:
             raise ValueError("Invalid event type. Use 'new' or 'finished'.")
+
+        template = random.choice(templates or [default_template])
+        try:
+            return template.format(user=user, cluster=self.cluster_name)
+        except (KeyError, IndexError):
+            return template
 
 
     def get_slurm_job_data(self, squeue_output=None, job_state="RUNNING"):
