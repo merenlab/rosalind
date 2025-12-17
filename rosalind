@@ -30,7 +30,9 @@ def load_config(config_file=None):
     config_path = Path(config_file) if config_file else Path(__file__).with_name(DEFAULT_CONFIG_FILENAME)
 
     if not config_path.is_file():
-        raise RuntimeError(f"Missing config file at '{config_path}'. Provide one via --config-file.")
+        template_path = config_path.with_suffix(config_path.suffix + ".template")
+        hint = f" Copy the template with `cp {template_path} {config_path}` and fill in your secrets." if template_path.is_file() else ""
+        raise RuntimeError(f"Missing config file at '{config_path}'. Provide one via --config-file.{hint}")
 
     with config_path.open() as handle:
         return yaml.safe_load(handle) or {}
@@ -42,7 +44,7 @@ class SlurmMonitor:
 
         # user args
         A = lambda x: self.args.__dict__[x] if x in self.args.__dict__ else None
-        self.webhook = A('webhook')
+        self.webhook = None
         self.group_id = A('group_id')
         self.config = load_config(A('config_file'))
 
@@ -117,8 +119,8 @@ class SlurmMonitor:
 
         try:
             if not self.webhook and not self.stdout_only:
-                raise RuntimeError("You are running this program without a webhook -- that is fine, but in that case you have to "
-                                   "include the flag  `--stdout-only`. BECAUSE.")
+                raise RuntimeError("Missing Slack webhook in config.yaml and `--stdout-only` not set. Either provide a "
+                                   "webhook in your config or run with --stdout-only for local output.")
         except RuntimeError as e:
             print(f"\n\033[91mERROR:\033[0m {e}\n")
             sys.exit(1)
@@ -404,8 +406,6 @@ def get_user_args():
     groupA = parser.add_argument_group('ESSENTIALS', 'Essential information related to Slurm and Slack')
     groupA.add_argument('--group-id', metavar="ID", default=None, help="Your group ID or partition on Slurm. If you "
         "don't have one, you can leave this empty and see what happens (we haven't really tested it lol).")
-    groupA.add_argument('--webhook', metavar="URL", default=None, help="Slack web hook for the program to "
-        "communicate with you.")
     groupA.add_argument('--config-file', metavar="PATH", default=None, help=f"Path to the YAML config file. "
         f"Defaults to {DEFAULT_CONFIG_FILENAME} next to this script.")
 
