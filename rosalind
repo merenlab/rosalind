@@ -56,7 +56,10 @@ class SlurmMonitor:
                             "sore6591": "<@U06GGGRPZ18>", # avril
                             "jert0988": "<@U0106BK0S3Y>", # amy
                             "zina4710": "<@UHYU10DTK>", # jessika
+                            'woes6158': "<@U08RQ2R88H5>", # sophia fatima
                             "mueb6691": "Matthias Weitz", # matthias
+                            "wazo2883": "<@U09L3CLRZNH>", # nithin
+                            "gebi9651": "<@UQ4S17CLU>", # Sam
                             }
 
         try:
