@@ -494,36 +494,66 @@ class SlurmMonitor:
         return False
 
     def _upload_file_to_slack(self, channel_id, file_path, title=None):
-        """Upload a file to Slack via uploadV2 (no legacy fallback to avoid deprecation errors)."""
+        """Upload a file to Slack via uploadV2; fall back to legacy upload if V2 is unavailable."""
 
         if not channel_id or not self.slack_token:
             return False, "missing_token_or_channel"
 
-        def _post(url, data):
-            with open(file_path, "rb") as fh:
-                return requests.post(
-                    url,
-                    headers={"Authorization": f"Bearer {self.slack_token}"},
-                    data=data,
-                    files={"file": fh}
-                )
-
-        payload = {
+        file_name = Path(file_path).name
+        v2_payload = {
             "channel_id": channel_id,
-            "title": title or Path(file_path).name,
+            "title": title or file_name,
         }
-        response = _post("https://slack.com/api/files.uploadV2", payload)
-        body = {}
         try:
-            body = response.json()
-        except Exception:
+            with open(file_path, "rb") as fh:
+                response = requests.post(
+                    "https://slack.com/api/files.uploadV2",
+                    headers={"Authorization": f"Bearer {self.slack_token}"},
+                    data=v2_payload,
+                    files={"file": (file_name, fh)},
+                )
             body = {}
+            try:
+                body = response.json()
+            except Exception:
+                body = {}
 
-        if response.status_code == 200 and body.get("ok"):
-            return True, None
+            if response.status_code == 200 and body.get("ok"):
+                return True, None
 
-        error_msg = body.get("error") if isinstance(body, dict) else response.text
-        return False, error_msg
+            v2_error = body.get("error") if isinstance(body, dict) else response.text
+        except Exception as e:
+            v2_error = str(e)
+
+        # If V2 is unavailable, deprecated, or unrecognized, try legacy upload.
+        if v2_error in {"unknown_method", "method_deprecated", "invalid_arguments"}:
+            legacy_payload = {
+                "channels": channel_id,
+                "title": title or file_name,
+            }
+            try:
+                with open(file_path, "rb") as fh:
+                    response = requests.post(
+                        "https://slack.com/api/files.upload",
+                        headers={"Authorization": f"Bearer {self.slack_token}"},
+                        data=legacy_payload,
+                        files={"file": (file_name, fh)},
+                    )
+                body = {}
+                try:
+                    body = response.json()
+                except Exception:
+                    body = {}
+
+                if response.status_code == 200 and body.get("ok"):
+                    return True, None
+
+                legacy_error = body.get("error") if isinstance(body, dict) else response.text
+                return False, legacy_error
+            except Exception as e:
+                return False, f"legacy_upload_failed: {e}"
+
+        return False, v2_error
 
     def _maybe_upload_usage_figure(self):
         """Generate usage figure and upload/save depending on configuration."""
@@ -558,6 +588,8 @@ class SlurmMonitor:
                     hint = " (token likely needs files:write and conversations scopes)"
                 elif error_msg == "method_deprecated":
                     hint = " (workspace rejects legacy uploads; check that uploadV2 scopes are allowed)"
+                elif error_msg == "unknown_method":
+                    hint = " (workspace may not support files.uploadV2; legacy upload was attempted)"
                 print(f"Warning: failed to upload usage figure to Slack: {error_msg}{hint}")
         except Exception as e:
             print(f"Warning: exception during Slack upload: {e}")
