@@ -493,6 +493,54 @@ class SlurmMonitor:
 
         return False
 
+    def _upload_file_to_slack(self, channel_id, file_path, title=None):
+        """Upload a file to Slack, using uploadV2 (preferred) and falling back if needed."""
+
+        if not channel_id or not self.slack_token:
+            return False, "missing_token_or_channel"
+
+        def _post(url, data):
+            with open(file_path, "rb") as fh:
+                return requests.post(
+                    url,
+                    headers={"Authorization": f"Bearer {self.slack_token}"},
+                    data=data,
+                    files={"file": fh}
+                )
+
+        # Try the newer API first.
+        payload = {
+            "channel_id": channel_id,
+            "title": title or Path(file_path).name,
+        }
+        response = _post("https://slack.com/api/files.uploadV2", payload)
+        body = {}
+        try:
+            body = response.json()
+        except Exception:
+            body = {}
+
+        if response.status_code == 200 and body.get("ok"):
+            return True, None
+
+        # If Slack reports the old method is deprecated (or if uploadV2 is unavailable),
+        # fall back to the legacy files.upload.
+        if body.get("error") in ("method_deprecated", "invalid_arguments", "unknown_method"):
+            legacy_payload = {
+                "channels": channel_id,
+                "title": title or Path(file_path).name,
+            }
+            response = _post("https://slack.com/api/files.upload", legacy_payload)
+            try:
+                body = response.json()
+            except Exception:
+                body = {}
+            if response.status_code == 200 and body.get("ok"):
+                return True, None
+
+        error_msg = body.get("error") if isinstance(body, dict) else response.text
+        return False, error_msg
+
     def _maybe_upload_usage_figure(self):
         """Generate usage figure and upload/save depending on configuration."""
 
@@ -511,29 +559,21 @@ class SlurmMonitor:
         self._ensure_slack_channel_membership(upload_channel)
 
         try:
-            with open(figure_path, "rb") as fh:
-                response = requests.post(
-                    "https://slack.com/api/files.upload",
-                    headers={"Authorization": f"Bearer {self.slack_token}"},
-                    data={
-                        "channels": upload_channel,
-                        "title": f"Usage for {self.cluster_name}",
-                    },
-                    files={"file": fh}
-                )
-            resp_payload = {}
-            try:
-                resp_payload = response.json()
-            except Exception:
-                pass
-
-            if response.status_code != 200 or not resp_payload.get("ok"):
-                error_msg = resp_payload.get("error") if isinstance(resp_payload, dict) else response.text
+            ok, error_msg = self._upload_file_to_slack(
+                channel_id=upload_channel,
+                file_path=figure_path,
+                title=f"Usage for {self.cluster_name}",
+            )
+            if not ok:
                 hint = ""
                 if error_msg == "not_in_channel":
                     hint = " (invite the Slack app to the channel or grant it access)"
                 elif error_msg == "channel_not_found":
                     hint = " (check the channel ID or rename to an ID in config)"
+                elif error_msg == "missing_scope":
+                    hint = " (token likely needs files:write and conversations scopes)"
+                elif error_msg == "method_deprecated":
+                    hint = " (Slack workspace may enforce files.uploadV2; ensure the token supports it)"
                 print(f"Warning: failed to upload usage figure to Slack: {error_msg}{hint}")
         except Exception as e:
             print(f"Warning: exception during Slack upload: {e}")
