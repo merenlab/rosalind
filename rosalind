@@ -494,66 +494,63 @@ class SlurmMonitor:
         return False
 
     def _upload_file_to_slack(self, channel_id, file_path, title=None):
-        """Upload a file to Slack via uploadV2; fall back to legacy upload if V2 is unavailable."""
+        """Upload a file to Slack using the external upload flow (V2)."""
 
         if not channel_id or not self.slack_token:
             return False, "missing_token_or_channel"
 
-        file_name = Path(file_path).name
-        v2_payload = {
-            "channel_id": channel_id,
-            "title": title or file_name,
-        }
+        file_path = Path(file_path)
+        file_name = file_path.name
+        file_size = file_path.stat().st_size
+
+        headers = {"Authorization": f"Bearer {self.slack_token}"}
+
+        # Step 1: Get an upload URL from Slack
+        try:
+            response = requests.post(
+                "https://slack.com/api/files.getUploadURLExternal",
+                headers=headers,
+                data={"filename": file_name, "length": file_size},
+            )
+            body = response.json() if response.status_code == 200 else {}
+
+            if not body.get("ok"):
+                return False, body.get("error", "failed_to_get_upload_url")
+
+            upload_url = body["upload_url"]
+            file_id = body["file_id"]
+        except Exception as e:
+            return False, f"get_upload_url_failed: {e}"
+
+        # Step 2: Upload the file content to the provided URL
         try:
             with open(file_path, "rb") as fh:
-                response = requests.post(
-                    "https://slack.com/api/files.uploadV2",
-                    headers={"Authorization": f"Bearer {self.slack_token}"},
-                    data=v2_payload,
-                    files={"file": (file_name, fh)},
-                )
-            body = {}
-            try:
-                body = response.json()
-            except Exception:
-                body = {}
+                upload_response = requests.post(upload_url, files={"file": fh})
 
-            if response.status_code == 200 and body.get("ok"):
+            if upload_response.status_code not in (200, 201):
+                return False, f"file_upload_failed: {upload_response.status_code}"
+        except Exception as e:
+            return False, f"file_upload_failed: {e}"
+
+        # Step 3: Complete the upload and share to the channel
+        try:
+            complete_payload = {
+                "files": json.dumps([{"id": file_id, "title": title or file_name}]),
+                "channel_id": channel_id,
+            }
+            complete_response = requests.post(
+                "https://slack.com/api/files.completeUploadExternal",
+                headers=headers,
+                data=complete_payload,
+            )
+            complete_body = complete_response.json() if complete_response.status_code == 200 else {}
+
+            if complete_body.get("ok"):
                 return True, None
 
-            v2_error = body.get("error") if isinstance(body, dict) else response.text
+            return False, complete_body.get("error", "complete_upload_failed")
         except Exception as e:
-            v2_error = str(e)
-
-        # If V2 is unavailable, deprecated, or unrecognized, try legacy upload.
-        if v2_error in {"unknown_method", "method_deprecated", "invalid_arguments"}:
-            legacy_payload = {
-                "channels": channel_id,
-                "title": title or file_name,
-            }
-            try:
-                with open(file_path, "rb") as fh:
-                    response = requests.post(
-                        "https://slack.com/api/files.upload",
-                        headers={"Authorization": f"Bearer {self.slack_token}"},
-                        data=legacy_payload,
-                        files={"file": (file_name, fh)},
-                    )
-                body = {}
-                try:
-                    body = response.json()
-                except Exception:
-                    body = {}
-
-                if response.status_code == 200 and body.get("ok"):
-                    return True, None
-
-                legacy_error = body.get("error") if isinstance(body, dict) else response.text
-                return False, legacy_error
-            except Exception as e:
-                return False, f"legacy_upload_failed: {e}"
-
-        return False, v2_error
+            return False, f"complete_upload_failed: {e}"
 
     def _maybe_upload_usage_figure(self):
         """Generate usage figure and upload/save depending on configuration."""
@@ -583,13 +580,13 @@ class SlurmMonitor:
                 if error_msg == "not_in_channel":
                     hint = " (invite the Slack app to the channel or grant it access)"
                 elif error_msg == "channel_not_found":
-                    hint = " (check the channel ID or rename to an ID in config)"
+                    hint = " (check the channel ID or name in config)"
                 elif error_msg == "missing_scope":
-                    hint = " (token likely needs files:write and conversations scopes)"
-                elif error_msg == "method_deprecated":
-                    hint = " (workspace rejects legacy uploads; check that uploadV2 scopes are allowed)"
-                elif error_msg == "unknown_method":
-                    hint = " (workspace may not support files.uploadV2; legacy upload was attempted)"
+                    hint = " (token needs files:write scope)"
+                elif "get_upload_url" in str(error_msg):
+                    hint = " (check that your token has files:write scope)"
+                elif "complete_upload" in str(error_msg):
+                    hint = " (file uploaded but sharing failed; check channel permissions)"
                 print(f"Warning: failed to upload usage figure to Slack: {error_msg}{hint}")
         except Exception as e:
             print(f"Warning: exception during Slack upload: {e}")
