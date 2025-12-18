@@ -494,7 +494,7 @@ class SlurmMonitor:
         return False
 
     def _upload_file_to_slack(self, channel_id, file_path, title=None):
-        """Upload a file to Slack, using uploadV2 (preferred) and falling back if needed."""
+        """Upload a file to Slack via uploadV2 (no legacy fallback to avoid deprecation errors)."""
 
         if not channel_id or not self.slack_token:
             return False, "missing_token_or_channel"
@@ -508,7 +508,6 @@ class SlurmMonitor:
                     files={"file": fh}
                 )
 
-        # Try the newer API first.
         payload = {
             "channel_id": channel_id,
             "title": title or Path(file_path).name,
@@ -522,21 +521,6 @@ class SlurmMonitor:
 
         if response.status_code == 200 and body.get("ok"):
             return True, None
-
-        # If Slack reports the old method is deprecated (or if uploadV2 is unavailable),
-        # fall back to the legacy files.upload.
-        if body.get("error") in ("method_deprecated", "invalid_arguments", "unknown_method"):
-            legacy_payload = {
-                "channels": channel_id,
-                "title": title or Path(file_path).name,
-            }
-            response = _post("https://slack.com/api/files.upload", legacy_payload)
-            try:
-                body = response.json()
-            except Exception:
-                body = {}
-            if response.status_code == 200 and body.get("ok"):
-                return True, None
 
         error_msg = body.get("error") if isinstance(body, dict) else response.text
         return False, error_msg
@@ -573,7 +557,7 @@ class SlurmMonitor:
                 elif error_msg == "missing_scope":
                     hint = " (token likely needs files:write and conversations scopes)"
                 elif error_msg == "method_deprecated":
-                    hint = " (Slack workspace may enforce files.uploadV2; ensure the token supports it)"
+                    hint = " (workspace rejects legacy uploads; check that uploadV2 scopes are allowed)"
                 print(f"Warning: failed to upload usage figure to Slack: {error_msg}{hint}")
         except Exception as e:
             print(f"Warning: exception during Slack upload: {e}")
