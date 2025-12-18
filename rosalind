@@ -429,6 +429,70 @@ class SlurmMonitor:
                     nodes.add(token)
         return len(nodes)
 
+    def _resolve_slack_channel(self, channel):
+        """Best effort conversion of channel names to IDs using the Slack token, when available."""
+
+        if not channel or not self.slack_token:
+            return channel
+
+        if isinstance(channel, str) and channel[:1] in ("C", "G", "D"):
+            return channel  # already looks like an ID
+
+        name = channel.lstrip("#")
+
+        try:
+            response = requests.get(
+                "https://slack.com/api/conversations.list",
+                headers={"Authorization": f"Bearer {self.slack_token}"},
+                params={
+                    "exclude_archived": True,
+                    "limit": 1000,
+                    "types": "public_channel,private_channel"
+                }
+            )
+            if response.status_code != 200:
+                print(f"Warning: could not resolve Slack channel '{channel}': {response.text}")
+                return channel
+
+            payload = response.json()
+            if not payload.get("ok"):
+                print(f"Warning: could not resolve Slack channel '{channel}': {payload.get('error')}")
+                return channel
+
+            for ch in payload.get("channels", []):
+                if ch.get("name") == name or ch.get("name_normalized") == name:
+                    return ch.get("id") or channel
+        except Exception as e:
+            print(f"Warning: exception while resolving Slack channel '{channel}': {e}")
+
+        return channel
+
+    def _ensure_slack_channel_membership(self, channel_id):
+        """Attempt to join the target channel so uploads do not fail with not_in_channel."""
+
+        if not self.slack_token or not channel_id:
+            return False
+
+        try:
+            response = requests.post(
+                "https://slack.com/api/conversations.join",
+                headers={"Authorization": f"Bearer {self.slack_token}"},
+                data={"channel": channel_id}
+            )
+            if response.status_code != 200:
+                print(f"Warning: could not join Slack channel {channel_id}: {response.text}")
+                return False
+
+            payload = response.json()
+            if payload.get("ok") or payload.get("error") == "already_in_channel":
+                return True
+
+            print(f"Warning: could not join Slack channel {channel_id}: {payload.get('error')}")
+        except Exception as e:
+            print(f"Warning: exception while joining Slack channel {channel_id}: {e}")
+
+        return False
+
     def _maybe_upload_usage_figure(self):
         """Generate usage figure and upload/save depending on configuration."""
 
@@ -441,19 +505,36 @@ class SlurmMonitor:
             print(f"Usage figure saved to {figure_path} (Slack upload not configured).")
             return
 
+        upload_channel = self._resolve_slack_channel(self.slack_channel)
+
+        # Even if this fails we still try the upload and surface the Slack error.
+        self._ensure_slack_channel_membership(upload_channel)
+
         try:
             with open(figure_path, "rb") as fh:
                 response = requests.post(
                     "https://slack.com/api/files.upload",
                     headers={"Authorization": f"Bearer {self.slack_token}"},
                     data={
-                        "channels": self.slack_channel,
+                        "channels": upload_channel,
                         "title": f"Usage for {self.cluster_name}",
                     },
                     files={"file": fh}
                 )
-            if response.status_code != 200 or not response.json().get("ok"):
-                print(f"Warning: failed to upload usage figure to Slack: {response.text}")
+            resp_payload = {}
+            try:
+                resp_payload = response.json()
+            except Exception:
+                pass
+
+            if response.status_code != 200 or not resp_payload.get("ok"):
+                error_msg = resp_payload.get("error") if isinstance(resp_payload, dict) else response.text
+                hint = ""
+                if error_msg == "not_in_channel":
+                    hint = " (invite the Slack app to the channel or grant it access)"
+                elif error_msg == "channel_not_found":
+                    hint = " (check the channel ID or rename to an ID in config)"
+                print(f"Warning: failed to upload usage figure to Slack: {error_msg}{hint}")
         except Exception as e:
             print(f"Warning: exception during Slack upload: {e}")
 
