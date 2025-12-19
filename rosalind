@@ -689,7 +689,7 @@ class SlurmMonitor:
             ax.margins(x=0)
 
         fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(9, 10), sharex=True, constrained_layout=False)
-        fig.subplots_adjust(hspace=0.20)
+        fig.subplots_adjust(left=0.05, right=0.97, top=0.97, bottom=0.04, hspace=0.20)
         for ax in axes:
             ax.set_facecolor("#EFEFEF")
             for spine in ax.spines.values():
