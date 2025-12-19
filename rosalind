@@ -624,9 +624,8 @@ class SlurmMonitor:
             return None
 
         times = [p[0] for p in points]
-        cpus = [p[1].get("total_cpus", 0) for p in points]
         nodes = [p[1].get("total_nodes", 0) for p in points]
-        mem_gb = [p[1].get("total_mem_mb", 0) / 1024 for p in points]
+        user_snapshots = [p[1].get("users", {}) for p in points]
 
         # use a pleasant style if available
         try:
@@ -634,48 +633,38 @@ class SlurmMonitor:
         except Exception:
             plt.style.use("ggplot")
 
-        fig, axes = plt.subplots(nrows=4, ncols=1, figsize=(9, 12), sharex=True, constrained_layout=True)
-        plots = [
-            ("Num CPUs occupied", cpus, "#1f77b4"),
-            ("Num active nodes", nodes, "#2ca02c"),
-            ("Amount of Memory allocated (GB)", mem_gb, "#d62728"),
-        ]
+        def plot_user_stack(ax, metric_key, title, value_transform=None):
+            user_totals = defaultdict(float)
+            for snap in user_snapshots:
+                for user_id, vals in snap.items():
+                    value = vals.get(metric_key, 0)
+                    if value_transform:
+                        value = value_transform(value)
+                    user_totals[user_id] += value
 
-        for ax, (label, series, color) in zip(axes[:3], plots):
-            if not series:
-                ax.set_title(f"{label} (no data)")
+            if not any(user_totals.values()):
+                ax.set_title(f"{title} (no data)")
                 ax.axis('off')
-                continue
-            ax.fill_between(times, series, color=color, alpha=0.25)
-            ax.plot(times, series, color=color, linewidth=0.5)
-            ax.set_title(label)
-            ax.grid(True, alpha=0.3)
-            ax.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d\n%H:%M"))
+                return
 
-        # stacked area by top users (CPU)
-        user_snapshots = [p[1].get("users", {}) for p in points]
-        user_totals = defaultdict(float)
-        for snap in user_snapshots:
-            for user_id, vals in snap.items():
-                user_totals[user_id] += vals.get("cpu", 0)
+            top_users = [u for u, _ in sorted(user_totals.items(), key=lambda x: x[1], reverse=True)[:5]]
+            series_map = {u: [] for u in top_users}
+            other_series = []
+            for snap in user_snapshots:
+                other_total = 0
+                for user_id in top_users:
+                    value = snap.get(user_id, {}).get(metric_key, 0)
+                    if value_transform:
+                        value = value_transform(value)
+                    series_map[user_id].append(value)
+                for user_id, vals in snap.items():
+                    if user_id not in top_users:
+                        value = vals.get(metric_key, 0)
+                        if value_transform:
+                            value = value_transform(value)
+                        other_total += value
+                other_series.append(other_total)
 
-        top_users = [u for u, _ in sorted(user_totals.items(), key=lambda x: x[1], reverse=True)[:5]]
-        series_map = {u: [] for u in top_users}
-        other_series = []
-        for snap in user_snapshots:
-            other_total = 0
-            for user_id in top_users:
-                series_map[user_id].append(snap.get(user_id, {}).get("cpu", 0))
-            for user_id, vals in snap.items():
-                if user_id not in top_users:
-                    other_total += vals.get("cpu", 0)
-            other_series.append(other_total)
-
-        ax_users = axes[3]
-        if not any(user_totals.values()):
-            ax_users.set_title("CPU by user (no data)")
-            ax_users.axis('off')
-        else:
             labels = [self.get_known_user_name(u, prefer_name=True) for u in top_users]
             stacks = [series_map[u] for u in top_users]
             if any(other_series):
@@ -683,11 +672,27 @@ class SlurmMonitor:
                 stacks.append(other_series)
 
             colors = [plt.cm.tab10(i % 10) for i in range(len(stacks))]
-            ax_users.stackplot(times, stacks, labels=labels, colors=colors, alpha=0.8)
-            ax_users.set_title("CPU usage by user (stacked)")
-            ax_users.legend(loc="upper left", ncol=2, fontsize="small")
-            ax_users.grid(True, alpha=0.3)
-            ax_users.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d\n%H:%M"))
+            ax.stackplot(times, stacks, labels=labels, colors=colors, alpha=0.8)
+            ax.set_title(title)
+            ax.legend(loc="upper left", ncol=2, fontsize="small")
+            ax.grid(True, alpha=0.3)
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d\n%H:%M"))
+
+        fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(9, 10), sharex=True, constrained_layout=True)
+
+        ax_nodes = axes[0]
+        if not nodes:
+            ax_nodes.set_title("Active nodes")
+            ax_nodes.axis('off')
+        else:
+            ax_nodes.fill_between(times, nodes, color="#2ca02c", alpha=0.25)
+            ax_nodes.plot(times, nodes, color="#2ca02c", linewidth=0.5)
+            ax_nodes.set_title("Num active nodes")
+            ax_nodes.grid(True, alpha=0.3)
+            ax_nodes.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d\n%H:%M"))
+
+        plot_user_stack(axes[1], "cpu", "CPU usage")
+        plot_user_stack(axes[2], "mem_mb", "Memory Allocated (GB)", value_transform=lambda v: v / 1024)
 
         if output_path:
             output_path = Path(output_path)
