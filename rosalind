@@ -648,7 +648,11 @@ class SlurmMonitor:
                     user_totals[user_id] += value
 
             if not any(user_totals.values()):
-                ax.set_title(f"{title} (no data)", fontname="Helvetica", color="#545454")
+                ax.set_title(
+                    f"{title} (no data)",
+                    fontfamily=["Liberation Sans", "Arial", "Helvetica", "sans-serif"],
+                    color="#545454",
+                )
                 ax.axis('off')
                 return
 
@@ -680,7 +684,11 @@ class SlurmMonitor:
             if any(other_series):
                 colors.append("#7f7f7f")
             ax.stackplot(times, stacks, labels=labels, colors=colors, alpha=0.8)
-            ax.set_title(title, fontname="Helvetica", color="#545454")
+            ax.set_title(
+                title,
+                fontfamily=["Liberation Sans", "Arial", "Helvetica", "sans-serif"],
+                color="#545454",
+            )
             legend = ax.legend(loc="upper left", ncol=2, fontsize=7)
             for text in legend.get_texts():
                 text.set_color("#767676")
@@ -701,12 +709,20 @@ class SlurmMonitor:
 
         ax_nodes = axes[0]
         if not nodes:
-            ax_nodes.set_title("Active nodes", fontname="Helvetica", color="#545454")
+            ax_nodes.set_title(
+                "Active nodes",
+                fontfamily=["Liberation Sans", "Arial", "Helvetica", "sans-serif"],
+                color="#545454",
+            )
             ax_nodes.axis('off')
         else:
             ax_nodes.fill_between(times, nodes, color="#2ca02c", alpha=0.25)
             ax_nodes.plot(times, nodes, color="#2ca02c", linewidth=0.5)
-            ax_nodes.set_title("Num active nodes", fontname="Helvetica", color="#545454")
+            ax_nodes.set_title(
+                "Num active nodes",
+                fontfamily=["Liberation Sans", "Arial", "Helvetica", "sans-serif"],
+                color="#545454",
+            )
             ax_nodes.grid(True, alpha=0.3)
             ax_nodes.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d\n%H:%M"))
             ax_nodes.margins(x=0)
