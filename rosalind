@@ -647,7 +647,7 @@ class SlurmMonitor:
                 ax.axis('off')
                 return
 
-            top_users = [u for u, _ in sorted(user_totals.items(), key=lambda x: x[1], reverse=True)[:5]]
+            top_users = [u for u, _ in sorted(user_totals.items(), key=lambda x: x[1], reverse=True)[:8]]
             series_map = {u: [] for u in top_users}
             other_series = []
             for snap in user_snapshots:
