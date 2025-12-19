@@ -7,4 +7,4 @@ JOBID       NAME                                USER                 CPUS     MI
 6911270     mosaic-coassembly                   gegu0440             1        6015M         RUNNING         1-02:31:13      21-00:00:00     1            mpcs043
 6912400     megahit                             gegu0440             40       19250M        RUNNING         23:00:27        7-00:00:00      1            mpcs052
 6914670     megahit                             gegu0440             40       19250M        RUNNING         6:12:46         7-00:00:00      1            mpcs051
-6914671     anvi-profile                        meren                90       29250M        RUNNING         22:41           7-00:00:00      1            mpcs051
+6914671     anvi-profile                        tepp5511             90       29250M        RUNNING         22:41           7-00:00:00      1            mpcs051
