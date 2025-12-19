@@ -633,6 +633,11 @@ class SlurmMonitor:
         except Exception:
             plt.style.use("ggplot")
 
+        all_users = sorted({user_id for snap in user_snapshots for user_id in snap})
+        color_map = {
+            user_id: plt.cm.tab10(i % 10) for i, user_id in enumerate(all_users)
+        }
+
         def plot_user_stack(ax, metric_key, title, value_transform=None):
             user_totals = defaultdict(float)
             for snap in user_snapshots:
@@ -643,7 +648,7 @@ class SlurmMonitor:
                     user_totals[user_id] += value
 
             if not any(user_totals.values()):
-                ax.set_title(f"{title} (no data)")
+                ax.set_title(f"{title} (no data)", fontname="Helvetica", color="#545454")
                 ax.axis('off')
                 return
 
@@ -671,28 +676,45 @@ class SlurmMonitor:
                 labels.append("Other users")
                 stacks.append(other_series)
 
-            colors = [plt.cm.tab10(i % 10) for i in range(len(stacks))]
+            colors = [color_map.get(u, "#7f7f7f") for u in top_users]
+            if any(other_series):
+                colors.append("#7f7f7f")
             ax.stackplot(times, stacks, labels=labels, colors=colors, alpha=0.8)
-            ax.set_title(title)
-            ax.legend(loc="upper left", ncol=2, fontsize="small")
+            ax.set_title(title, fontname="Helvetica", color="#545454")
+            legend = ax.legend(loc="upper left", ncol=2, fontsize=7)
+            for text in legend.get_texts():
+                text.set_color("#767676")
             ax.grid(True, alpha=0.3)
             ax.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d\n%H:%M"))
+            ax.margins(x=0)
 
-        fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(9, 10), sharex=True, constrained_layout=True)
+        fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(9, 10), sharex=True, constrained_layout=False)
+        fig.subplots_adjust(hspace=0.20)
+        for ax in axes:
+            ax.set_facecolor("#EFEFEF")
+            for spine in ax.spines.values():
+                spine.set_color("#989898")
+                spine.set_linewidth(0.4)
+            ax.tick_params(colors="#989898", labelsize=7)
+            ax.xaxis.label.set_color("#989898")
+            ax.yaxis.label.set_color("#989898")
 
         ax_nodes = axes[0]
         if not nodes:
-            ax_nodes.set_title("Active nodes")
+            ax_nodes.set_title("Active nodes", fontname="Helvetica", color="#545454")
             ax_nodes.axis('off')
         else:
             ax_nodes.fill_between(times, nodes, color="#2ca02c", alpha=0.25)
             ax_nodes.plot(times, nodes, color="#2ca02c", linewidth=0.5)
-            ax_nodes.set_title("Num active nodes")
+            ax_nodes.set_title("Num active nodes", fontname="Helvetica", color="#545454")
             ax_nodes.grid(True, alpha=0.3)
             ax_nodes.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d\n%H:%M"))
+            ax_nodes.margins(x=0)
 
         plot_user_stack(axes[1], "cpu", "CPU usage")
         plot_user_stack(axes[2], "mem_mb", "Memory Allocated (GB)", value_transform=lambda v: v / 1024)
+        for ax in axes:
+            ax.set_xlim(times[0], times[-1])
 
         if output_path:
             output_path = Path(output_path)
