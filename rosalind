@@ -10,7 +10,6 @@ import platform
 import argparse
 import requests
 import subprocess
-import itertools
 
 import json
 import tempfile
@@ -558,6 +557,13 @@ class SlurmMonitor:
         figure_output_path = self.usage_log_path.with_suffix(".png")
         figure_path = self._build_usage_figure(output_path=figure_output_path)
         if not figure_path:
+            return
+
+        today = datetime.today()
+        day_name = today.strftime("%A").lower()
+
+        if self.stdout_only or day_name in self.quiet_on_days:
+            print(f"Usage figure saved to {figure_path} (Slack upload suppressed).")
             return
 
         if not self.slack_token or not self.slack_channel:
